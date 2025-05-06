@@ -22,7 +22,6 @@ class LLMIntentEngine:
                  timeout: int = 5,
                  fuzzy: bool = True,
                  min_words: int = 2,
-                 labels: Optional[Dict[str, str]] = None,
                  ignore_labels: Optional[List[str]] = None,
                  ignore_skills: Optional[List[str]] = None,
                  bus: Optional[MessageBusClient] = None):
@@ -36,7 +35,6 @@ class LLMIntentEngine:
             timeout: Timeout in seconds for LLM API requests (default 5).
             fuzzy: Whether to enable fuzzy matching for intent correction (default True).
             min_words: Minimum number of words required in an utterance to attempt prediction (default 2).
-            labels: Optional dictionary mapping normalized intent labels to their canonical forms. If not provided, intent labels are synchronized from the message bus.
             ignore_labels: Optional list of intent labels to exclude from consideration.
             ignore_skills: Optional list of skill identifiers to exclude intents from.
             bus: Optional message bus client for intent synchronization and communication. If not provided, a new client is created.
@@ -53,7 +51,7 @@ class LLMIntentEngine:
         self.fuzzy_threshold = 0.55
         self.ignore_labels = ignore_labels or []
         self.prompts = collections.defaultdict(dict)
-
+        self.mappings = {}
         # these skills are specialized/ambiguous enough to consistently throw off the LLMS
         self.ignore_skills = ignore_skills or []
 
@@ -67,19 +65,20 @@ class LLMIntentEngine:
         if not self.bus.connected_event.is_set():
             self.bus.connected_event.wait()
 
-        if not labels:
-            self.sync_intents()
-        else:
-            self.mappings = {self.normalize(l): l for l in labels}
+        self.sync_intents()
 
     def sync_intents(self, timeout=1):
-        # TODO - persona/ocp/common_query/stop intents
         """
         Synchronizes and normalizes available intent labels from Adapt and Padatious services.
         
         Retrieves current intent labels from both Adapt and Padatious via the message bus, filters out ignored labels, and constructs a mapping of normalized label forms to their canonical names. Adds manual mappings for certain common or legacy intents to support consistent label normalization.
         """
-        labels = self._get_adapt_intents(timeout) + self._get_padatious_intents(timeout)
+        # TODO - persona/ocp/common_query/stop intents
+        try:
+            labels = self._get_adapt_intents(timeout) + self._get_padatious_intents(timeout)
+        except Exception:
+            LOG.error("Failed to sync intents via messagebus")
+            return
 
         # mappings are there to help out the LLM a bit
         # normalizing labels to give them some more structure
@@ -146,7 +145,7 @@ class LLMIntentEngine:
         msg = Message("intent.service.adapt.manifest.get")
         res = self.bus.wait_for_response(msg, "intent.service.adapt.manifest", timeout=timeout)
         if not res:
-            return None
+            raise RuntimeError("Failed to retrieve intent names")
         return [i["name"] for i in res.data["intents"] if i["name"] not in self.ignore_labels]
 
     def _get_padatious_intents(self, timeout=1):
@@ -162,7 +161,7 @@ class LLMIntentEngine:
         msg = Message("intent.service.padatious.manifest.get")
         res = self.bus.wait_for_response(msg, "intent.service.padatious.manifest", timeout=timeout)
         if not res:
-            return None
+            raise RuntimeError("Failed to retrieve intent names")
         return [i for i in res.data["intents"] if i not in self.ignore_labels]
 
     @staticmethod
@@ -279,8 +278,8 @@ class LLMIntentPipeline(ConfidenceMatcherPipeline):
                                    timeout=self.config.get("timeout", 10),
                                    fuzzy=self.config.get("fuzzy", True),
                                    min_words=self.config.get("min_words", 2),
-                                   labels=self.config.get("labels", []),
                                    ignore_labels=self.config.get("ignore_labels", []),
+                                   ignore_skills=self.config.get("ignore_skills", []),
                                    bus=self.bus)
         LOG.info(f"Loaded Ollama Intents pipeline with model: '{self.llm.model}' and url: '{self.llm.base_url}'")
         self.bus.on("mycroft.ready", self.handle_sync_intents)
