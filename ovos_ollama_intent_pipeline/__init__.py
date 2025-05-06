@@ -26,6 +26,23 @@ class LLMIntentEngine:
                  ignore_labels: Optional[List[str]] = None,
                  ignore_skills: Optional[List[str]] = None,
                  bus: Optional[MessageBusClient] = None):
+        """
+        Initializes the LLMIntentEngine for intent prediction using an LLM API.
+         
+        Args:
+            model: Name of the LLM model to use.
+            base_url: Base URL of the LLM API endpoint.
+            temperature: Sampling temperature for the LLM (default 0.0).
+            timeout: Timeout in seconds for LLM API requests (default 5).
+            fuzzy: Whether to enable fuzzy matching for intent correction (default True).
+            min_words: Minimum number of words required in an utterance to attempt prediction (default 2).
+            labels: Optional dictionary mapping normalized intent labels to their canonical forms. If not provided, intent labels are synchronized from the message bus.
+            ignore_labels: Optional list of intent labels to exclude from consideration.
+            ignore_skills: Optional list of skill identifiers to exclude intents from.
+            bus: Optional message bus client for intent synchronization and communication. If not provided, a new client is created.
+         
+        Loads locale-specific prompt templates, synchronizes or sets intent labels, and prepares the engine for intent prediction.
+        """
         self.model = model
         self.base_url = base_url
         self.temperature = temperature
@@ -57,6 +74,11 @@ class LLMIntentEngine:
 
     def sync_intents(self, timeout=1):
         # TODO - persona/ocp/common_query/stop intents
+        """
+        Synchronizes and normalizes available intent labels from Adapt and Padatious services.
+        
+        Retrieves current intent labels from both Adapt and Padatious via the message bus, filters out ignored labels, and constructs a mapping of normalized label forms to their canonical names. Adds manual mappings for certain common or legacy intents to support consistent label normalization.
+        """
         labels = self._get_adapt_intents(timeout) + self._get_padatious_intents(timeout)
 
         # mappings are there to help out the LLM a bit
@@ -79,11 +101,21 @@ class LLMIntentEngine:
 
     @property
     def labels(self):
+        """
+        Returns a list of intent labels, excluding those in the ignore list or associated with ignored skills.
+        """
         return [l for l in self.mappings.values()
                 if l not in self.ignore_labels
                 and not any(s in l for s in self.ignore_skills)]
 
     def load_locale(self):
+        """
+        Loads language-specific prompt templates and examples from the locale directory.
+        
+        Scans each language subdirectory under the 'locale' folder and loads the contents of
+        'system_prompt.txt', 'prompt_template.txt', and 'few_shot_examples.txt' files into the
+        corresponding entries of the prompts dictionary for use in LLM prompting.
+        """
         res_dir = os.path.join(os.path.dirname(__file__), 'locale')
         for lang in os.listdir(res_dir):
             prompt_file = os.path.join(res_dir, lang, 'system_prompt.txt')
@@ -102,6 +134,15 @@ class LLMIntentEngine:
                     self.prompts[lang]["few_shot_examples"] = f.read()
 
     def _get_adapt_intents(self, timeout=1):
+        """
+        Retrieves Adapt intent names from the message bus, excluding ignored labels.
+        
+        Args:
+            timeout: Maximum time in seconds to wait for the response.
+        
+        Returns:
+            A list of Adapt intent names, or None if no response is received.
+        """
         msg = Message("intent.service.adapt.manifest.get")
         res = self.bus.wait_for_response(msg, "intent.service.adapt.manifest", timeout=timeout)
         if not res:
@@ -109,6 +150,15 @@ class LLMIntentEngine:
         return [i["name"] for i in res.data["intents"] if i["name"] not in self.ignore_labels]
 
     def _get_padatious_intents(self, timeout=1):
+        """
+        Retrieves Padatious intent names from the message bus, excluding ignored labels.
+        
+        Args:
+            timeout: Maximum time in seconds to wait for the response.
+        
+        Returns:
+            A list of Padatious intent names not present in the ignore list, or None if no response is received.
+        """
         msg = Message("intent.service.padatious.manifest.get")
         res = self.bus.wait_for_response(msg, "intent.service.padatious.manifest", timeout=timeout)
         if not res:
@@ -118,6 +168,11 @@ class LLMIntentEngine:
     @staticmethod
     def normalize(text: str) -> str:
         # standardize labels as much as possible to reduce token usage + not confuse the LLM
+        """
+        Normalizes an intent label string by lowercasing and removing or replacing common substrings.
+        
+        This standardization reduces token usage and helps prevent confusion for the language model by producing concise, uniform intent labels.
+        """
         norm = (text.lower().
                 replace("", "").
                 replace(".openvoiceos", "").
@@ -132,6 +187,18 @@ class LLMIntentEngine:
         return norm
 
     def predict(self, utterance: str, lang: str) -> Optional[str]:
+        """
+        Predicts the most likely intent label for a given utterance using an LLM.
+        
+        Attempts to match the utterance to a known intent by constructing a prompt with language-specific or multilingual templates and sending it to the LLM API. The predicted label is normalized and validated against known intents, with optional fuzzy matching to correct minor mismatches. Returns the matched intent label or None if no valid intent is found.
+        
+        Args:
+            utterance: The input text to classify.
+            lang: The language code for prompt selection.
+        
+        Returns:
+            The matched intent label, or None if no valid intent is identified.
+        """
         if len(utterance.split()) < self.min_words:
             LOG.debug(f"Skipping LLM intent match, utterance too short (< {self.min_words} words)")
             return None
