@@ -24,6 +24,7 @@ class LLMIntentEngine:
                  min_words: int = 2,
                  labels: Optional[Dict[str, str]] = None,
                  ignore_labels: Optional[List[str]] = None,
+                 ignore_skills: Optional[List[str]] = None,
                  bus: Optional[MessageBusClient] = None):
         self.model = model
         self.base_url = base_url
@@ -31,10 +32,13 @@ class LLMIntentEngine:
         self.timeout = timeout
         self.min_words = min_words
         self.fuzzy = fuzzy
-        self.fuzzy_strategy = MatchStrategy.DAMERAU_LEVENSHTEIN_SIMILARITY
-        self.fuzzy_threshold = 0.7
+        self.fuzzy_strategy = MatchStrategy.PARTIAL_TOKEN_SET_RATIO
+        self.fuzzy_threshold = 0.55
         self.ignore_labels = ignore_labels or []
         self.prompts = collections.defaultdict(dict)
+
+        # these skills are specialized/ambiguous enough to consistently throw off the LLMS
+        self.ignore_skills = ignore_skills or []
 
         self.load_locale()
 
@@ -49,53 +53,35 @@ class LLMIntentEngine:
         if not labels:
             self.sync_intents()
         else:
-            self.labels = labels
             self.mappings = {self.normalize(l): l for l in labels}
 
     def sync_intents(self, timeout=1):
-        # TODO - allow retrieving these from bus just like adapt/padatious
-        PERSONA = ["ovos-persona-pipeline:ask",
-                   "ovos-persona-pipeline:summon",
-                   "ovos-persona-pipeline:release_persona",
-                   "ovos-persona-pipeline:list_personas",
-                   "ovos-persona-pipeline:active_persona"]
-        OCP = ["ovos-common-play-pipeline:play",
-               #"ovos-common-play-pipeline:open",
-               #"ovos-common-play-pipeline:media_stop",
-               "ovos-common-play-pipeline:next",
-               "ovos-common-play-pipeline:prev",
-               "ovos-common-play-pipeline:pause",
-               #"ovos-common-play-pipeline:play_favorites",
-               #"ovos-common-play-pipeline:like_song",
-               "ovos-common-play-pipeline:resume",
-               #"ovos-common-play-pipeline:save_game",
-               #"ovos-common-play-pipeline:load_game"
-               ]
-        CQ = [
-            'ovos-common-query-pipeline:general_question'
-        ]
-        STOP = [
-            # "ovos-stop-pipeline:global_stop",
-            "ovos-stop-pipeline:stop",
-        ]
-
-        self.labels = self._get_adapt_intents(timeout) + self._get_padatious_intents(timeout) + \
-                      STOP + OCP + CQ + PERSONA
+        # TODO - persona/ocp/common_query/stop intents
+        labels = self._get_adapt_intents(timeout) + self._get_padatious_intents(timeout)
 
         # mappings are there to help out the LLM a bit
         # normalizing labels to give them some more structure
-        self.mappings = {self.normalize(l): l for l in self.labels}
-        self.mappings["ovos-common-query-pipeline:general_question"] = "common_query.question"
-        self.mappings["ovos-common-play-pipeline:play"] = "ovos.common_play.play_search"
-        self.mappings["ovos-common-play-pipeline:next"] = "ocp:next"
-        self.mappings["ovos-common-play-pipeline:prev"] = "ocp:prev"
-        self.mappings["ovos-common-play-pipeline:pause"] = "ocp:pause"
-        self.mappings["ovos-common-play-pipeline:resume"] = "ocp:resume"
-        self.mappings["ovos-persona-pipeline:release_persona"] = "persona:release"
-        self.mappings["ovos-persona-pipeline:summon"] = "persona:summon"
-        self.mappings["ovos-persona-pipeline:list_personas"] = "persona:list"
-        self.mappings["ovos-persona-pipeline:active_persona"] = "persona:check"
-        self.mappings["ovos-persona-pipeline:ask"] = "persona:query"
+        self.mappings = {self.normalize(l): l for l in labels if l not in self.ignore_labels}
+
+        # HACK: manually maintained until exposed via bus api dynamically
+        self.mappings["common-query:general_question"] = "common_query.question"
+        self.mappings["common-play:play"] = "ovos.common_play.play_search"
+        self.mappings["common-play:next"] = "ocp:next"
+        self.mappings["common-play:prev"] = "ocp:prev"
+        self.mappings["common-play:pause"] = "ocp:pause"
+        self.mappings["common-play:resume"] = "ocp:resume"
+        self.mappings["persona:release_persona"] = "persona:release"
+        self.mappings["persona:summon"] = "persona:summon"
+        self.mappings["persona:list_personas"] = "persona:list"
+        self.mappings["persona:active_persona"] = "persona:check"
+        self.mappings["persona:ask"] = "persona:query"
+        self.mappings["stop:stop"] = "mycroft.stop"
+
+    @property
+    def labels(self):
+        return [l for l in self.mappings.values()
+                if l not in self.ignore_labels
+                and not any(s in l for s in self.ignore_skills)]
 
     def load_locale(self):
         res_dir = os.path.join(os.path.dirname(__file__), 'locale')
@@ -120,21 +106,29 @@ class LLMIntentEngine:
         res = self.bus.wait_for_response(msg, "intent.service.adapt.manifest", timeout=timeout)
         if not res:
             return None
-        return [i["name"] for i in res.data["intents"]]
+        return [i["name"] for i in res.data["intents"] if i["name"] not in self.ignore_labels]
 
     def _get_padatious_intents(self, timeout=1):
         msg = Message("intent.service.padatious.manifest.get")
         res = self.bus.wait_for_response(msg, "intent.service.padatious.manifest", timeout=timeout)
         if not res:
             return None
-        return res.data["intents"]
+        return [i for i in res.data["intents"] if i not in self.ignore_labels]
 
     @staticmethod
     def normalize(text: str) -> str:
+        # standardize labels as much as possible to reduce token usage + not confuse the LLM
         norm = (text.lower().
                 replace("", "").
                 replace(".openvoiceos", "").
-                replace("skill-ovos-", "ovos-skill-"))
+                replace(".intent", "").
+                replace("skill-ovos-", "ovos-skill-").
+                replace("ovos-skill-", "").
+                replace("-pipeline", "").
+                replace("ovos-", "").
+                replace("intent", ""))
+        if norm.endswith("alt"): # duplicate intents
+            norm = norm[:-3]
         return norm
 
     def predict(self, utterance: str, lang: str) -> Optional[str]:
@@ -157,9 +151,10 @@ class LLMIntentEngine:
         if "few_shot_examples" in self.prompts[lang]:
             examples = self.prompts[lang]["few_shot_examples"]
 
+        label_list = "\n- ".join([self.normalize(l) for l in self.labels])
         prompt = prompt_template.format(transcribed_text=utterance,
                                         language=lang,
-                                        label_list="\n- ".join(self.labels),
+                                        label_list=label_list,
                                         examples=examples)
 
         try:
@@ -182,31 +177,26 @@ class LLMIntentEngine:
             LOG.error(f"⚠️ Error with model {self.model} and utterance '{utterance}': {e}")
             return None
 
-        if result == "None" or not result:
-            LOG.debug(f"⚠️ No intent for utterance: '{utterance}'")
-            return None
-
-        mistakes = {
-            # ".OpenVoiceOS": ".openvoiceos",
-            "(intent)": "",
-            "": ""
-        }
-        for k, v in mistakes.items():
-            result = result.replace(k, v)
-
-        # force a valid label
-        if self.fuzzy and result not in self.labels:
-            best, score = match_one(result, self.labels, strategy=self.fuzzy_strategy)
-            if score >= self.fuzzy_threshold:
-                LOG.debug(
-                    f"⚠️ utterance '{utterance}' - fuzzy match hallucinated intent  ({score}) - {result} -> {best}")
-                result = best
-        if result not in self.labels:
-            LOG.warning(f"⚠️ Error with model {self.model} and utterance '{utterance}': hallucinated intent - {result}")
+        if not result or result == "None" or result in self.ignore_labels:
+            #LOG.debug(f"⚠️ No intent for utterance: '{utterance}'")
             return None
 
         # ensure output is a valid intent, undo any normalization done to help the LLM
-        return self.mappings.get(result) or result
+        result = self.mappings.get(result) or self.mappings.get(self.normalize(result)) or result
+
+        if self.fuzzy and result not in self.labels:
+            # force a valid label
+            best, score = match_one(result, self.labels, strategy=self.fuzzy_strategy)
+
+            if round(score, 2) >= self.fuzzy_threshold:
+                result = best
+            else:
+                LOG.debug(f"⚠️ failed to fuzzy match hallucinated intent  ({score}) - {result} -> {best}")
+        if result not in self.labels:
+            #LOG.warning(f"⚠️ Error with model '{self.model}' and utterance '{utterance}': hallucinated intent - {result}")
+            return None
+
+        return result
 
 
 class LLMIntentPipeline(ConfidenceMatcherPipeline):

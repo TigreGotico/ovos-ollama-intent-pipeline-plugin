@@ -1,36 +1,36 @@
 User: "stop stop stop"
 Language: en  
-Label: ovos-stop-pipeline:stop
+Label: stop:stop
 
 User: "what is the speed of light"
 Language: en
-Label: ovos-common-query-pipeline:general_question
+Label: common-query:general_question
 
 User: "play metallica"
 Language: en
-Label: ovos-common-play-pipeline:play
+Label: common-play:play
 
 User: "what does chatgpt think about AI"
 Language: en
-Label: ovos-persona-pipeline:ask
+Label: persona:ask
 
 User: "enable ready on boot notification sound"
 Language: en  
-Label: ovos-skill-boot-finished:enable_ready_notification
+Label: boot-finished:enable_ready_notification
 
 User: "list scheduled alarms"
 Language: en
-Label: ovos-skill-alerts:ListAlerts
+Label: alerts:listalerts
 
 User: "did i miss any alerts"
 Language: en
-Label: ovos-skill-alerts:missed_alerts
+Label: alerts:missed_alerts
 
 User: "how much time left in rice timer"
 Language: en
-Label: ovos-skill-alerts:TimerStatus
+Label: alerts:timerstatus
 
 User: "disable parrot mode"
 Language: en
-Label: ovos-skill-parrot:stop_parrot
+Label: parrot:stop_parrot
 
