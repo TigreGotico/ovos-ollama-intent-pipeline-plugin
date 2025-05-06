@@ -21,6 +21,8 @@ class LLMIntentEngine:
                  temperature: float = 0.0,
                  timeout: int = 5,
                  fuzzy: bool = True,
+                 fuzzy_strategy: MatchStrategy = MatchStrategy.PARTIAL_TOKEN_SET_RATIO,
+                 fuzzy_threshold = 0.55,
                  min_words: int = 2,
                  ignore_labels: Optional[List[str]] = None,
                  ignore_skills: Optional[List[str]] = None,
@@ -47,8 +49,8 @@ class LLMIntentEngine:
         self.timeout = timeout
         self.min_words = min_words
         self.fuzzy = fuzzy
-        self.fuzzy_strategy = MatchStrategy.PARTIAL_TOKEN_SET_RATIO
-        self.fuzzy_threshold = 0.55
+        self.fuzzy_strategy = fuzzy_strategy
+        self.fuzzy_threshold = fuzzy_threshold
         self.ignore_labels = ignore_labels or []
         self.prompts = collections.defaultdict(dict)
         self.mappings = {}
@@ -181,7 +183,7 @@ class LLMIntentEngine:
                 replace("-pipeline", "").
                 replace("ovos-", "").
                 replace("intent", ""))
-        if norm.endswith("alt"): # duplicate intents
+        if norm.endswith("alt"):  # duplicate intents
             norm = norm[:-3]
         return norm
 
@@ -244,7 +246,7 @@ class LLMIntentEngine:
             return None
 
         if not result or result == "None" or result in self.ignore_labels:
-            #LOG.debug(f"⚠️ No intent for utterance: '{utterance}'")
+            # LOG.debug(f"⚠️ No intent for utterance: '{utterance}'")
             return None
 
         # ensure output is a valid intent, undo any normalization done to help the LLM
@@ -259,7 +261,7 @@ class LLMIntentEngine:
             else:
                 LOG.debug(f"⚠️ failed to fuzzy match hallucinated intent  ({score}) - {result} -> {best}")
         if result not in self.labels:
-            #LOG.warning(f"⚠️ Error with model '{self.model}' and utterance '{utterance}': hallucinated intent - {result}")
+            # LOG.warning(f"⚠️ Error with model '{self.model}' and utterance '{utterance}': hallucinated intent - {result}")
             return None
 
         return result
@@ -272,11 +274,28 @@ class LLMIntentPipeline(ConfidenceMatcherPipeline):
         config = config or Configuration().get('intents', {}).get("ovos_ollama_intent_pipeline") or dict()
         super().__init__(bus, config)
 
+        strategy_map = {
+            "token_set_ratio": MatchStrategy.TOKEN_SET_RATIO,
+            "token_sort_ratio": MatchStrategy.TOKEN_SORT_RATIO,
+            "partial_token_set_ratio": MatchStrategy.PARTIAL_TOKEN_SET_RATIO,
+            "partial_token_sort_ratio": MatchStrategy.PARTIAL_TOKEN_SORT_RATIO,
+            "damerau_levenshtein_similarity": MatchStrategy.DAMERAU_LEVENSHTEIN_SIMILARITY,
+            "partial_ratio": MatchStrategy.PARTIAL_RATIO,
+            "simple_ratio": MatchStrategy.SIMPLE_RATIO,
+        }
+        s = self.config.get("fuzzy_strategy", "partial_token_set_ratio")
+        if s not in strategy_map:
+            LOG.error(f"Invalid fuzzy match strategy '{s}', defaulting to 'partial_token_set_ratio' instead")
+            strategy = MatchStrategy.PARTIAL_TOKEN_SET_RATIO
+        else:
+            strategy = strategy_map[s]
         self.llm = LLMIntentEngine(model=self.config["model"],
                                    base_url=self.config["base_url"],
                                    temperature=self.config.get("temperature", 0.0),
                                    timeout=self.config.get("timeout", 10),
                                    fuzzy=self.config.get("fuzzy", True),
+                                   fuzzy_strategy=strategy,
+                                   fuzzy_threshold=self.config.get("fuzzy_threshold", 0.55),
                                    min_words=self.config.get("min_words", 2),
                                    ignore_labels=self.config.get("ignore_labels", []),
                                    ignore_skills=self.config.get("ignore_skills", []),
