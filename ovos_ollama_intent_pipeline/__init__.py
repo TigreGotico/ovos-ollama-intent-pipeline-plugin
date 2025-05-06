@@ -1,5 +1,6 @@
 import collections
 import os.path
+import time
 from typing import List, Optional, Union, Dict
 
 import requests
@@ -59,16 +60,17 @@ class LLMIntentEngine:
                    "ovos-persona-pipeline:list_personas",
                    "ovos-persona-pipeline:active_persona"]
         OCP = ["ovos-common-play-pipeline:play",
-               "ovos-common-play-pipeline:open",
-               "ovos-common-play-pipeline:media_stop",
+               #"ovos-common-play-pipeline:open",
+               #"ovos-common-play-pipeline:media_stop",
                "ovos-common-play-pipeline:next",
                "ovos-common-play-pipeline:prev",
                "ovos-common-play-pipeline:pause",
-               "ovos-common-play-pipeline:play_favorites",
-               "ovos-common-play-pipeline:like_song",
+               #"ovos-common-play-pipeline:play_favorites",
+               #"ovos-common-play-pipeline:like_song",
                "ovos-common-play-pipeline:resume",
-               "ovos-common-play-pipeline:save_game",
-               "ovos-common-play-pipeline:load_game"]
+               #"ovos-common-play-pipeline:save_game",
+               #"ovos-common-play-pipeline:load_game"
+               ]
         CQ = [
             'ovos-common-query-pipeline:general_question'
         ]
@@ -83,7 +85,17 @@ class LLMIntentEngine:
         # mappings are there to help out the LLM a bit
         # normalizing labels to give them some more structure
         self.mappings = {self.normalize(l): l for l in self.labels}
-
+        self.mappings["ovos-common-query-pipeline:general_question"] = "common_query.question"
+        self.mappings["ovos-common-play-pipeline:play"] = "ovos.common_play.play_search"
+        self.mappings["ovos-common-play-pipeline:next"] = "ocp:next"
+        self.mappings["ovos-common-play-pipeline:prev"] = "ocp:prev"
+        self.mappings["ovos-common-play-pipeline:pause"] = "ocp:pause"
+        self.mappings["ovos-common-play-pipeline:resume"] = "ocp:resume"
+        self.mappings["ovos-persona-pipeline:release_persona"] = "persona:release"
+        self.mappings["ovos-persona-pipeline:summon"] = "persona:summon"
+        self.mappings["ovos-persona-pipeline:list_personas"] = "persona:list"
+        self.mappings["ovos-persona-pipeline:active_persona"] = "persona:check"
+        self.mappings["ovos-persona-pipeline:ask"] = "persona:query"
 
     def load_locale(self):
         res_dir = os.path.join(os.path.dirname(__file__), 'locale')
@@ -132,12 +144,18 @@ class LLMIntentEngine:
 
         lang, score = closest_match(lang, [l for l in self.prompts if l != "mul"], 10)
 
-        if lang not in self.prompts:
-            lang = "mul"  # use multilingual prompts
+        # default to multilingual prompts
+        system = self.prompts["mul"]["system"]
+        prompt_template = self.prompts["mul"]["prompt_template"]
+        examples = self.prompts["mul"]["few_shot_examples"]
 
-        system = self.prompts[lang]["system"]
-        prompt_template = self.prompts[lang]["prompt_template"]
-        examples = self.prompts[lang]["few_shot_examples"]
+        # optimized lang specific prompts
+        if "system" in self.prompts[lang]:
+            system = self.prompts[lang]["system"]
+        if "prompt_template" in self.prompts[lang]:
+            prompt_template = self.prompts[lang]["prompt_template"]
+        if "few_shot_examples" in self.prompts[lang]:
+            examples = self.prompts[lang]["few_shot_examples"]
 
         prompt = prompt_template.format(transcribed_text=utterance,
                                         language=lang,
@@ -198,8 +216,8 @@ class LLMIntentPipeline(ConfidenceMatcherPipeline):
         config = config or Configuration().get('intents', {}).get("ovos_ollama_intent_pipeline") or dict()
         super().__init__(bus, config)
 
-        self.llm = LLMIntentEngine(model=self.config.get("model"),
-                                   base_url=self.config.get("base_url"),
+        self.llm = LLMIntentEngine(model=self.config["model"],
+                                   base_url=self.config["base_url"],
                                    temperature=self.config.get("temperature", 0.0),
                                    timeout=self.config.get("timeout", 10),
                                    fuzzy=self.config.get("fuzzy", True),
@@ -207,9 +225,26 @@ class LLMIntentPipeline(ConfidenceMatcherPipeline):
                                    labels=self.config.get("labels", []),
                                    ignore_labels=self.config.get("ignore_labels", []),
                                    bus=self.bus)
+        LOG.info(f"Loaded Ollama Intents pipeline with model: '{self.llm.model}' and url: '{self.llm.base_url}'")
+        self.bus.on("mycroft.ready", self.handle_sync_intents)
+        self.bus.on("padatious:register_intent", self.handle_sync_intents)
+        self.bus.on("register_intent", self.handle_sync_intents)
+        self.bus.on("detach_intent", self.handle_sync_intents)
+        self.bus.on("detach_skill", self.handle_sync_intents)
+        self._syncing = False
+
+    def handle_sync_intents(self, message):
+        # sync newly (de)registered intents with debounce
+        if self._syncing:
+            return
+        self._syncing = True
+        time.sleep(5)
+        self.llm.sync_intents()
+        self._syncing = False
+        LOG.debug(f"ollama registered intents: {len(self.llm.labels) - len(self.llm.ignore_labels)}")
 
     def match_low(self, utterances: List[str], lang: str, message: Message) -> Optional[IntentHandlerMatch]:
-        self.llm.sync_intents() # intents only known at runtime (dynamic)  TODO - optimize to only sync when needed
+        LOG.debug("Matching intents via Ollama")
         match = self.llm.predict(utterances[0], lang)
         if match:
             return IntentHandlerMatch(
