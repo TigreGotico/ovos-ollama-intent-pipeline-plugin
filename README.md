@@ -1,6 +1,6 @@
 # 🧠 OVOS Ollama Intent Pipeline
 
-A intent matching pipeline for [OpenVoiceOS (OVOS)](https://openvoiceos.com/), powered by local or remote LLMs via an HTTP API such as [Ollama](https://ollama.com/).
+A intent matching pipeline for [OpenVoiceOS (OVOS)](https://openvoiceos.org), powered by local or remote LLMs via an HTTP API such as [Ollama](https://ollama.com/).
 
 This plugin uses LLM-based reasoning to classify natural language utterances into intent labels registered with the system (Adapt, Padatious, and plugin-specific labels). It works well as a fallback pipeline when other deterministic engines don’t provide a high-confidence match.
 
@@ -82,12 +82,6 @@ locale/
 * Tune `fuzzy_threshold` and `temperature` to control hallucination tolerance.
 * Consider restricting the list of possible labels (`ignore_labels`) for more accurate results.
 * Keep your few-shot examples short and relevant.
-
-
----
-
-## 🔧 Development Notes
-
 * Intent syncing uses the OVOS message bus and queries Adapt and Padatious services.
 * LLM output is sanitized and optionally fuzzy-matched to prevent unregistered intent errors.
 
