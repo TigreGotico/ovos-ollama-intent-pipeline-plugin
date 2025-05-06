@@ -1,0 +1,40 @@
+User: "una cançó del joan dausà"  
+Language: ca  
+Label: ovos-common-play-pipeline:play
+
+User: "stop stop stop"  
+Language: en  
+Label: ovos-stop-pipeline:stop
+
+User: "qual é a velocidade da luz"  
+Language: pt  
+Label: ovos-common-query-pipeline:general_question
+
+User: "play metallica"
+Language: en
+Label: ovos-common-play-pipeline:play
+
+User: "què pensa el chatgpt sobre la intel·ligència artificial"  
+Language: ca  
+Label: ovos-persona-pipeline:ask
+
+User: "enable ready on boot notification sound"
+Language: en  
+Label: ovos-skill-boot-finished:enable_ready_notification
+
+User: "tinc alguna alarma pendent?"
+Language: ca
+Label: ovos-skill-alerts:ListAlerts
+
+User: "perdí alguna alerta"
+Language: es
+Label: ovos-skill-alerts:missed_alerts
+
+User: "wie viel Zeit bleibt beim Küchentimer"
+Language: de
+Label: ovos-skill-alerts:TimerStatus
+
+User: "desactiva el mode lloro"
+Language: ca
+Label: ovos-skill-parrot:stop_parrot
+

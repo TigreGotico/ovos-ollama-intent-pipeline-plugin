@@ -1,0 +1,4 @@
+README.md
+LICENSE.md
+requirements.txt
+recursive-include ovos_ollama_intent_pipeline/ *
