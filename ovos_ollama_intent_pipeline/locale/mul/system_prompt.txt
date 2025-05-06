@@ -7,5 +7,7 @@ Guidelines:
 - Never generate text outside the label name (no commentary, quotes, or extra formatting).
 - The input may be short, distorted, or imprecise. Use your best judgment, but err on the side of caution when uncertain.
 - The language of the utterance is provided and must be respected.
+- Intent labels are usually of the format "skill_id:intent_name" where skill_id corresponds to a parent domain and intent_name to a finegrained label
+- the intent_name and skill_id MUST make sense together
 
 This model is used as part of a production voice assistant pipeline. Accuracy and brevity are critical.
