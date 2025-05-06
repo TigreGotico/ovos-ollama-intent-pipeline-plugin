@@ -27,23 +27,23 @@ class LLMIntentEngine:
                  ignore_skills: Optional[List[str]] = None,
                  bus: Optional[MessageBusClient] = None):
         """
-                 Initializes the LLMIntentEngine for intent prediction using an LLM API.
-                 
-                 Args:
-                     model: Name of the LLM model to use.
-                     base_url: Base URL of the LLM API endpoint.
-                     temperature: Sampling temperature for the LLM (default 0.0).
-                     timeout: Timeout in seconds for LLM API requests (default 5).
-                     fuzzy: Whether to enable fuzzy matching for intent correction (default True).
-                     min_words: Minimum number of words required in an utterance to attempt prediction (default 2).
-                     labels: Optional dictionary mapping normalized intent labels to their canonical forms. If not provided, intent labels are synchronized from the message bus.
-                     ignore_labels: Optional list of intent labels to exclude from consideration.
-                     ignore_skills: Optional list of skill identifiers to exclude intents from.
-                     bus: Optional message bus client for intent synchronization and communication. If not provided, a new client is created.
-                 
-                 Loads locale-specific prompt templates, synchronizes or sets intent labels, and prepares the engine for intent prediction.
-                 """
-                 self.model = model
+        Initializes the LLMIntentEngine for intent prediction using an LLM API.
+         
+        Args:
+            model: Name of the LLM model to use.
+            base_url: Base URL of the LLM API endpoint.
+            temperature: Sampling temperature for the LLM (default 0.0).
+            timeout: Timeout in seconds for LLM API requests (default 5).
+            fuzzy: Whether to enable fuzzy matching for intent correction (default True).
+            min_words: Minimum number of words required in an utterance to attempt prediction (default 2).
+            labels: Optional dictionary mapping normalized intent labels to their canonical forms. If not provided, intent labels are synchronized from the message bus.
+            ignore_labels: Optional list of intent labels to exclude from consideration.
+            ignore_skills: Optional list of skill identifiers to exclude intents from.
+            bus: Optional message bus client for intent synchronization and communication. If not provided, a new client is created.
+         
+        Loads locale-specific prompt templates, synchronizes or sets intent labels, and prepares the engine for intent prediction.
+        """
+        self.model = model
         self.base_url = base_url
         self.temperature = temperature
         self.timeout = timeout
