@@ -28,20 +28,22 @@ class LLMIntentEngine:
                  ignore_skills: Optional[List[str]] = None,
                  bus: Optional[MessageBusClient] = None):
         """
-        Initializes the LLMIntentEngine for intent prediction using an LLM API.
+        Initializes an LLMIntentEngine for intent prediction using a configurable LLM API.
          
         Args:
-            model: Name of the LLM model to use.
-            base_url: Base URL of the LLM API endpoint.
-            temperature: Sampling temperature for the LLM (default 0.0).
-            timeout: Timeout in seconds for LLM API requests (default 5).
-            fuzzy: Whether to enable fuzzy matching for intent correction (default True).
-            min_words: Minimum number of words required in an utterance to attempt prediction (default 2).
-            ignore_labels: Optional list of intent labels to exclude from consideration.
-            ignore_skills: Optional list of skill identifiers to exclude intents from.
-            bus: Optional message bus client for intent synchronization and communication. If not provided, a new client is created.
+            model: The name of the LLM model to use for predictions.
+            base_url: The base URL of the LLM API endpoint.
+            temperature: Sampling temperature for the LLM (default is 0.0).
+            timeout: Timeout in seconds for LLM API requests (default is 5).
+            fuzzy: Enables fuzzy matching to correct invalid intent predictions (default is True).
+            fuzzy_strategy: Strategy used for fuzzy matching when correcting intent predictions.
+            fuzzy_threshold: Similarity threshold for accepting fuzzy matches.
+            min_words: Minimum number of words required in an utterance to attempt prediction (default is 2).
+            ignore_labels: List of intent labels to exclude from prediction.
+            ignore_skills: List of skill identifiers whose intents should be excluded.
+            bus: Optional message bus client for synchronizing and communicating intent data.
          
-        Loads locale-specific prompt templates, synchronizes or sets intent labels, and prepares the engine for intent prediction.
+        Loads locale-specific prompt templates, synchronizes known intent labels from message bus services, and prepares the engine for LLM-based intent prediction.
         """
         self.model = model
         self.base_url = base_url
@@ -170,9 +172,9 @@ class LLMIntentEngine:
     def normalize(text: str) -> str:
         # standardize labels as much as possible to reduce token usage + not confuse the LLM
         """
-        Normalizes an intent label string by lowercasing and removing or replacing common substrings.
+        Normalizes an intent label by lowercasing and removing or replacing common substrings.
         
-        This standardization reduces token usage and helps prevent confusion for the language model by producing concise, uniform intent labels.
+        Produces a concise, standardized label to reduce token usage and ambiguity for the language model.
         """
         norm = (text.lower().
                 replace("", "").
@@ -189,13 +191,13 @@ class LLMIntentEngine:
 
     def predict(self, utterance: str, lang: str) -> Optional[str]:
         """
-        Predicts the most likely intent label for a given utterance using an LLM.
+        Predicts the most likely intent label for a given utterance and language.
         
-        Attempts to match the utterance to a known intent by constructing a prompt with language-specific or multilingual templates and sending it to the LLM API. The predicted label is normalized and validated against known intents, with optional fuzzy matching to correct minor mismatches. Returns the matched intent label or None if no valid intent is found.
+        Constructs a prompt using language-specific or multilingual templates and sends it to the LLM API to classify the utterance. The predicted label is normalized and validated against known intents. If enabled, fuzzy matching is used to correct minor mismatches. Returns the matched intent label, or None if no valid intent is found.
         
         Args:
             utterance: The input text to classify.
-            lang: The language code for prompt selection.
+            lang: The language code used to select prompt templates.
         
         Returns:
             The matched intent label, or None if no valid intent is identified.
@@ -271,6 +273,11 @@ class LLMIntentPipeline(ConfidenceMatcherPipeline):
 
     def __init__(self, bus: Optional[Union[MessageBusClient, FakeBus]] = None,
                  config: Optional[Dict] = None):
+        """
+        Initializes the LLMIntentPipeline with configuration and event handlers.
+         
+        Loads pipeline configuration, resolves and validates the fuzzy matching strategy, and creates an LLMIntentEngine instance with the specified parameters. Registers message bus event handlers to synchronize intents on relevant system events.
+        """
         config = config or Configuration().get('intents', {}).get("ovos_ollama_intent_pipeline") or dict()
         super().__init__(bus, config)
 
