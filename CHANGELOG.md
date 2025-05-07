@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.3a1](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/tree/0.0.3a1) (2025-05-07)
+
+[Full Changelog](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/compare/0.0.2a1...0.0.3a1)
+
+**Merged pull requests:**
+
+- fix: configurable fuzzy match strategy [\#6](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/pull/6) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.0.2a1](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/tree/0.0.2a1) (2025-05-06)
 
 [Full Changelog](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/compare/0.0.1...0.0.2a1)
