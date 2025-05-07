@@ -21,25 +21,29 @@ class LLMIntentEngine:
                  temperature: float = 0.0,
                  timeout: int = 5,
                  fuzzy: bool = True,
+                 fuzzy_strategy: MatchStrategy = MatchStrategy.PARTIAL_TOKEN_SET_RATIO,
+                 fuzzy_threshold = 0.55,
                  min_words: int = 2,
                  ignore_labels: Optional[List[str]] = None,
                  ignore_skills: Optional[List[str]] = None,
                  bus: Optional[MessageBusClient] = None):
         """
-        Initializes the LLMIntentEngine for intent prediction using an LLM API.
+        Initializes an LLMIntentEngine for intent prediction using a configurable LLM API.
          
         Args:
-            model: Name of the LLM model to use.
-            base_url: Base URL of the LLM API endpoint.
-            temperature: Sampling temperature for the LLM (default 0.0).
-            timeout: Timeout in seconds for LLM API requests (default 5).
-            fuzzy: Whether to enable fuzzy matching for intent correction (default True).
-            min_words: Minimum number of words required in an utterance to attempt prediction (default 2).
-            ignore_labels: Optional list of intent labels to exclude from consideration.
-            ignore_skills: Optional list of skill identifiers to exclude intents from.
-            bus: Optional message bus client for intent synchronization and communication. If not provided, a new client is created.
+            model: The name of the LLM model to use for predictions.
+            base_url: The base URL of the LLM API endpoint.
+            temperature: Sampling temperature for the LLM (default is 0.0).
+            timeout: Timeout in seconds for LLM API requests (default is 5).
+            fuzzy: Enables fuzzy matching to correct invalid intent predictions (default is True).
+            fuzzy_strategy: Strategy used for fuzzy matching when correcting intent predictions.
+            fuzzy_threshold: Similarity threshold for accepting fuzzy matches.
+            min_words: Minimum number of words required in an utterance to attempt prediction (default is 2).
+            ignore_labels: List of intent labels to exclude from prediction.
+            ignore_skills: List of skill identifiers whose intents should be excluded.
+            bus: Optional message bus client for synchronizing and communicating intent data.
          
-        Loads locale-specific prompt templates, synchronizes or sets intent labels, and prepares the engine for intent prediction.
+        Loads locale-specific prompt templates, synchronizes known intent labels from message bus services, and prepares the engine for LLM-based intent prediction.
         """
         self.model = model
         self.base_url = base_url
@@ -47,8 +51,8 @@ class LLMIntentEngine:
         self.timeout = timeout
         self.min_words = min_words
         self.fuzzy = fuzzy
-        self.fuzzy_strategy = MatchStrategy.PARTIAL_TOKEN_SET_RATIO
-        self.fuzzy_threshold = 0.55
+        self.fuzzy_strategy = fuzzy_strategy
+        self.fuzzy_threshold = fuzzy_threshold
         self.ignore_labels = ignore_labels or []
         self.prompts = collections.defaultdict(dict)
         self.mappings = {}
@@ -168,9 +172,9 @@ class LLMIntentEngine:
     def normalize(text: str) -> str:
         # standardize labels as much as possible to reduce token usage + not confuse the LLM
         """
-        Normalizes an intent label string by lowercasing and removing or replacing common substrings.
+        Normalizes an intent label by lowercasing and removing or replacing common substrings.
         
-        This standardization reduces token usage and helps prevent confusion for the language model by producing concise, uniform intent labels.
+        Produces a concise, standardized label to reduce token usage and ambiguity for the language model.
         """
         norm = (text.lower().
                 replace("", "").
@@ -181,19 +185,19 @@ class LLMIntentEngine:
                 replace("-pipeline", "").
                 replace("ovos-", "").
                 replace("intent", ""))
-        if norm.endswith("alt"): # duplicate intents
+        if norm.endswith("alt"):  # duplicate intents
             norm = norm[:-3]
         return norm
 
     def predict(self, utterance: str, lang: str) -> Optional[str]:
         """
-        Predicts the most likely intent label for a given utterance using an LLM.
+        Predicts the most likely intent label for a given utterance and language.
         
-        Attempts to match the utterance to a known intent by constructing a prompt with language-specific or multilingual templates and sending it to the LLM API. The predicted label is normalized and validated against known intents, with optional fuzzy matching to correct minor mismatches. Returns the matched intent label or None if no valid intent is found.
+        Constructs a prompt using language-specific or multilingual templates and sends it to the LLM API to classify the utterance. The predicted label is normalized and validated against known intents. If enabled, fuzzy matching is used to correct minor mismatches. Returns the matched intent label, or None if no valid intent is found.
         
         Args:
             utterance: The input text to classify.
-            lang: The language code for prompt selection.
+            lang: The language code used to select prompt templates.
         
         Returns:
             The matched intent label, or None if no valid intent is identified.
@@ -244,7 +248,7 @@ class LLMIntentEngine:
             return None
 
         if not result or result == "None" or result in self.ignore_labels:
-            #LOG.debug(f"⚠️ No intent for utterance: '{utterance}'")
+            # LOG.debug(f"⚠️ No intent for utterance: '{utterance}'")
             return None
 
         # ensure output is a valid intent, undo any normalization done to help the LLM
@@ -259,7 +263,7 @@ class LLMIntentEngine:
             else:
                 LOG.debug(f"⚠️ failed to fuzzy match hallucinated intent  ({score}) - {result} -> {best}")
         if result not in self.labels:
-            #LOG.warning(f"⚠️ Error with model '{self.model}' and utterance '{utterance}': hallucinated intent - {result}")
+            # LOG.warning(f"⚠️ Error with model '{self.model}' and utterance '{utterance}': hallucinated intent - {result}")
             return None
 
         return result
@@ -269,14 +273,36 @@ class LLMIntentPipeline(ConfidenceMatcherPipeline):
 
     def __init__(self, bus: Optional[Union[MessageBusClient, FakeBus]] = None,
                  config: Optional[Dict] = None):
+        """
+        Initializes the LLMIntentPipeline with configuration and event handlers.
+         
+        Loads pipeline configuration, resolves and validates the fuzzy matching strategy, and creates an LLMIntentEngine instance with the specified parameters. Registers message bus event handlers to synchronize intents on relevant system events.
+        """
         config = config or Configuration().get('intents', {}).get("ovos_ollama_intent_pipeline") or dict()
         super().__init__(bus, config)
 
+        strategy_map = {
+            "token_set_ratio": MatchStrategy.TOKEN_SET_RATIO,
+            "token_sort_ratio": MatchStrategy.TOKEN_SORT_RATIO,
+            "partial_token_set_ratio": MatchStrategy.PARTIAL_TOKEN_SET_RATIO,
+            "partial_token_sort_ratio": MatchStrategy.PARTIAL_TOKEN_SORT_RATIO,
+            "damerau_levenshtein_similarity": MatchStrategy.DAMERAU_LEVENSHTEIN_SIMILARITY,
+            "partial_ratio": MatchStrategy.PARTIAL_RATIO,
+            "simple_ratio": MatchStrategy.SIMPLE_RATIO,
+        }
+        s = self.config.get("fuzzy_strategy", "partial_token_set_ratio")
+        if s not in strategy_map:
+            LOG.error(f"Invalid fuzzy match strategy '{s}', defaulting to 'partial_token_set_ratio' instead")
+            strategy = MatchStrategy.PARTIAL_TOKEN_SET_RATIO
+        else:
+            strategy = strategy_map[s]
         self.llm = LLMIntentEngine(model=self.config["model"],
                                    base_url=self.config["base_url"],
                                    temperature=self.config.get("temperature", 0.0),
                                    timeout=self.config.get("timeout", 10),
                                    fuzzy=self.config.get("fuzzy", True),
+                                   fuzzy_strategy=strategy,
+                                   fuzzy_threshold=self.config.get("fuzzy_threshold", 0.55),
                                    min_words=self.config.get("min_words", 2),
                                    ignore_labels=self.config.get("ignore_labels", []),
                                    ignore_skills=self.config.get("ignore_skills", []),
