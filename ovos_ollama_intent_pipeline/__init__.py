@@ -28,23 +28,23 @@ class LLMIntentEngine:
                  ignore_skills: Optional[List[str]] = None,
                  bus: Optional[MessageBusClient] = None):
         """
-                 Initializes an LLMIntentEngine for intent prediction using a configurable LLM API.
-                 
-                 Args:
-                     model: The name of the LLM model to use for predictions.
-                     base_url: The base URL of the LLM API endpoint.
-                     temperature: Sampling temperature for the LLM (default is 0.0).
-                     timeout: Timeout in seconds for LLM API requests (default is 5).
-                     fuzzy: Enables fuzzy matching to correct invalid intent predictions (default is True).
-                     fuzzy_strategy: Strategy used for fuzzy matching when correcting intent predictions.
-                     fuzzy_threshold: Similarity threshold for accepting fuzzy matches.
-                     min_words: Minimum number of words required in an utterance to attempt prediction (default is 2).
-                     ignore_labels: List of intent labels to exclude from prediction.
-                     ignore_skills: List of skill identifiers whose intents should be excluded.
-                     bus: Optional message bus client for synchronizing and communicating intent data.
-                 
-                 Loads locale-specific prompt templates, synchronizes known intent labels from message bus services, and prepares the engine for LLM-based intent prediction.
-                 """
+        Initializes an LLMIntentEngine for intent prediction using a configurable LLM API.
+         
+        Args:
+            model: The name of the LLM model to use for predictions.
+            base_url: The base URL of the LLM API endpoint.
+            temperature: Sampling temperature for the LLM (default is 0.0).
+            timeout: Timeout in seconds for LLM API requests (default is 5).
+            fuzzy: Enables fuzzy matching to correct invalid intent predictions (default is True).
+            fuzzy_strategy: Strategy used for fuzzy matching when correcting intent predictions.
+            fuzzy_threshold: Similarity threshold for accepting fuzzy matches.
+            min_words: Minimum number of words required in an utterance to attempt prediction (default is 2).
+            ignore_labels: List of intent labels to exclude from prediction.
+            ignore_skills: List of skill identifiers whose intents should be excluded.
+            bus: Optional message bus client for synchronizing and communicating intent data.
+         
+        Loads locale-specific prompt templates, synchronizes known intent labels from message bus services, and prepares the engine for LLM-based intent prediction.
+        """
         self.model = model
         self.base_url = base_url
         self.temperature = temperature
@@ -274,11 +274,11 @@ class LLMIntentPipeline(ConfidenceMatcherPipeline):
     def __init__(self, bus: Optional[Union[MessageBusClient, FakeBus]] = None,
                  config: Optional[Dict] = None):
         """
-                 Initializes the LLMIntentPipeline with configuration and event handlers.
-                 
-                 Loads pipeline configuration, resolves and validates the fuzzy matching strategy, and creates an LLMIntentEngine instance with the specified parameters. Registers message bus event handlers to synchronize intents on relevant system events.
-                 """
-                 config = config or Configuration().get('intents', {}).get("ovos_ollama_intent_pipeline") or dict()
+        Initializes the LLMIntentPipeline with configuration and event handlers.
+         
+        Loads pipeline configuration, resolves and validates the fuzzy matching strategy, and creates an LLMIntentEngine instance with the specified parameters. Registers message bus event handlers to synchronize intents on relevant system events.
+        """
+        config = config or Configuration().get('intents', {}).get("ovos_ollama_intent_pipeline") or dict()
         super().__init__(bus, config)
 
         strategy_map = {
