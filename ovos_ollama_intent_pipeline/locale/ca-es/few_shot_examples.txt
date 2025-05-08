@@ -1,35 +1,35 @@
 User: "una cançó del joan dausà"  
 Language: ca  
-Label: ovos-common-play-pipeline:play
+Label: common-play:play
 
 User: "quina és la velocitat de la llum"
 Language: ca
-Label: ovos-common-query-pipeline:general_question
+Label: common-query:general_question
 
 User: "posa metallica"
 Language: ca
-Label: ovos-common-play-pipeline:play
+Label: common-play:play
 
 User: "què pensa el chatgpt sobre la intel·ligència artificial"
 Language: ca
-Label: ovos-persona-pipeline:ask
+Label: persona:ask
 
 User: "activa el so de notificació de preparat a l'inici"
 Language: ca
-Label: ovos-skill-boot-finished:enable_ready_notification
+Label: boot-finished:enable_ready_notification
 
 User: "tinc alguna alarma pendent?"
 Language: ca
-Label: ovos-skill-alerts:ListAlerts
+Label: alerts:listalerts
 
 User: "he perdut alguna alerta?"
 Language: ca
-Label: ovos-skill-alerts:missed_alerts
+Label: alerts:missed_alerts
 
 User: "quanta estona queda al temporitzador de cuina?"
 Language: ca
-Label: ovos-skill-alerts:TimerStatus
+Label: alerts:timerstatus
 
 User: "desactiva el mode lloro"
 Language: ca
-Label: ovos-skill-parrot:stop_parrot
+Label: parrot:stop_parrot

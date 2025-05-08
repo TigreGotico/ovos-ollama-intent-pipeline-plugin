@@ -8,6 +8,7 @@ You are an intent classifier for a voice assistant. Your job is to choose the co
 - If the utterance does not match any intent, return None
 
 Intent Labels:
+
 {label_list}
 
 ---

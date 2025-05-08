@@ -1,12 +1,20 @@
 # Changelog
 
-## [0.0.1a2](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/tree/0.0.1a2) (2025-05-06)
+## [0.0.3a1](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/tree/0.0.3a1) (2025-05-07)
 
-[Full Changelog](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/compare/730ee38fb74ecef3f9bdbc76c085661c3e9e80c1...0.0.1a2)
+[Full Changelog](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/compare/0.0.2a1...0.0.3a1)
 
 **Merged pull requests:**
 
-- fix: better intent handling [\#1](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/pull/1) ([JarbasAl](https://github.com/JarbasAl))
+- fix: configurable fuzzy match strategy [\#6](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/pull/6) ([JarbasAl](https://github.com/JarbasAl))
+
+## [0.0.2a1](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/tree/0.0.2a1) (2025-05-06)
+
+[Full Changelog](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/compare/0.0.1...0.0.2a1)
+
+**Merged pull requests:**
+
+- improve intent label normalization [\#3](https://github.com/TigreGotico/ovos-ollama-intent-pipeline-plugin/pull/3) ([JarbasAl](https://github.com/JarbasAl))
 
 
 
